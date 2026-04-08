@@ -137,6 +137,29 @@ resource "aws_iam_policy" "kubernetes_control" {
           "acm:AddTagsToCertificate"
         ]
         Resource = "*"
+      },
+      # Client VPN — manage VPN endpoints and configurations
+      {
+        Sid    = "ClientVPNManagement"
+        Effect = "Allow"
+        Action = [
+          "ec2:ExportClientVpnClientConfiguration",
+          "ec2:CreateClientVpnEndpoint",
+          "ec2:DeleteClientVpnEndpoint",
+          "ec2:DescribeClientVpnEndpoints",
+          "ec2:ModifyClientVpnEndpoint",
+          "ec2:CreateClientVpnRoute",
+          "ec2:DeleteClientVpnRoute",
+          "ec2:DescribeClientVpnRoutes",
+          "ec2:AuthorizeClientVpnIngress",
+          "ec2:RevokeClientVpnIngress",
+          "ec2:DescribeClientVpnAuthorizationRules",
+          "ec2:AssociateClientVpnTargetNetwork",
+          "ec2:DisassociateClientVpnTargetNetwork",
+          "ec2:DescribeClientVpnTargetNetworks",
+          "ec2:ApplySecurityGroupsToClientVpnTargetNetwork"
+        ]
+        Resource = "*"
       }
     ]
   })
