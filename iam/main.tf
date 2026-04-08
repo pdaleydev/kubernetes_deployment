@@ -160,6 +160,21 @@ resource "aws_iam_policy" "kubernetes_control" {
           "ec2:ApplySecurityGroupsToClientVpnTargetNetwork"
         ]
         Resource = "*"
+      },
+      # CloudWatch — VPN connection logging
+      {
+        Sid    = "CloudWatchLogs"
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:PutLogEvents",
+          "logs:DeleteLogGroup",
+          "logs:DeleteLogStream"
+        ]
+        Resource = "*"
       }
     ]
   })
