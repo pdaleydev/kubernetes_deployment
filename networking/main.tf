@@ -110,3 +110,98 @@ resource "aws_vpc_endpoint" "s3" {
     Project        = var.project_name
   }
 }
+
+# -------------------------------------------------------------------
+# Security group for the VPN endpoint
+# -------------------------------------------------------------------
+resource "aws_security_group" "vpn_endpoint" {
+  name        = "kubernetes-vpn-endpoint-sg"
+  description = "Security group for AWS Client VPN endpoint"
+  vpc_id      = data.terraform_remote_state.networking.outputs.vpc_id
+
+  # Allow VPN tunnel traffic in
+  ingress {
+    description = "Client VPN UDP"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "udp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Allow VPN clients to reach anything in the private subnet
+  egress {
+    description = "Allow all outbound to VPC"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Project        = var.project_name
+  }
+}
+
+# -------------------------------------------------------------------
+# Client VPN Endpoint
+# -------------------------------------------------------------------
+resource "aws_ec2_client_vpn_endpoint" "kubernetes" {
+  description            = "Kubernetes cluster VPN access"
+  server_certificate_arn = var.server_cert_arn
+  client_cidr_block      = var.vpn_client_cidr
+  vpc_id                 = data.terraform_remote_state.networking.outputs.vpc_id
+  security_group_ids     = [aws_security_group.vpn_endpoint.id]
+  self_service_portal    = "disabled"
+  session_timeout_hours  = 24
+
+  # Mutual TLS authentication
+  authentication_options {
+    type                       = "certificate-authentication"
+    root_certificate_chain_arn = var.client_cert_arn
+  }
+
+  connection_log_options {
+    enabled               = true
+    cloudwatch_log_group  = aws_cloudwatch_log_group.vpn.name
+    cloudwatch_log_stream = aws_cloudwatch_log_stream.vpn.name
+  }
+
+  tags = {
+    Project        = var.project_name
+  }
+}
+
+# -------------------------------------------------------------------
+# Associate VPN endpoint with the private subnet
+# -------------------------------------------------------------------
+resource "aws_ec2_client_vpn_network_association" "kubernetes" {
+  client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.kubernetes.id
+  subnet_id              = aws_subnet.kubernetes_private.id
+}
+
+# -------------------------------------------------------------------
+# Authorisation rule — allow VPN clients to reach the private subnet
+# -------------------------------------------------------------------
+resource "aws_ec2_client_vpn_authorization_rule" "private_subnet" {
+  client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.kubernetes.id
+  target_network_cidr    = aws_subnet.kubernetes_private.cidr_block
+  authorize_all_groups   = true
+  description            = "Allow VPN clients to reach private subnet"
+}
+
+# -------------------------------------------------------------------
+# CloudWatch logs for VPN connections
+# -------------------------------------------------------------------
+resource "aws_cloudwatch_log_group" "vpn" {
+  name              = "/kubernetes/vpn"
+  retention_in_days = 7
+
+  tags = {
+    Project        = var.project_name
+  }
+}
+
+resource "aws_cloudwatch_log_stream" "vpn" {
+  name           = "vpn-connections"
+  log_group_name = aws_cloudwatch_log_group.vpn.name
+}

@@ -17,3 +17,13 @@ output "vpc_endpoints_security_group_id" {
   description = "Security group ID attached to the interface endpoints"
   value       = aws_security_group.vpc_endpoints.id
 }
+
+output "vpn_endpoint_id" {
+  description = "Client VPN endpoint ID"
+  value       = aws_ec2_client_vpn_endpoint.kubernetes.id
+}
+
+output "vpn_endpoint_dns" {
+  description = "VPN endpoint DNS name — needed to build the .ovpn config file"
+  value       = aws_ec2_client_vpn_endpoint.kubernetes.dns_name
+}
