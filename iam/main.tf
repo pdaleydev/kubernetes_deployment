@@ -123,6 +123,20 @@ resource "aws_iam_policy" "kubernetes_control" {
           "ssm:DescribeParameters"
         ]
         Resource = "*"
+      },
+      # ACM — manage VPN certificates
+      {
+        Sid    = "ACMManagement"
+        Effect = "Allow"
+        Action = [
+          "acm:ImportCertificate",
+          "acm:DeleteCertificate",
+          "acm:DescribeCertificate",
+          "acm:ListCertificates",
+          "acm:GetCertificate",
+          "acm:AddTagsToCertificate"
+        ]
+        Resource = "*"
       }
     ]
   })
