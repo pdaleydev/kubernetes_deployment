@@ -17,21 +17,6 @@ resource "aws_subnet" "kubernetes_private" {
   }
 }
 
-# Route table for the private subnet
-resource "aws_route_table" "kubernetes_private" {
-  vpc_id = data.aws_vpc.existing.id
-
-  tags = {
-    Project = var.project_name
-  }
-}
-
-# Associate the route table with the private subnet
-resource "aws_route_table_association" "kubernetes_private" {
-  subnet_id      = aws_subnet.kubernetes_private.id
-  route_table_id = aws_route_table.kubernetes_private.id
-}
-
 # -------------------------------------------------------------------
 # Security Group for Interface Endpoints (ECR API + ECR DKR)
 # -------------------------------------------------------------------
@@ -204,4 +189,50 @@ resource "aws_cloudwatch_log_group" "vpn" {
 resource "aws_cloudwatch_log_stream" "vpn" {
   name           = "vpn-connections"
   log_group_name = aws_cloudwatch_log_group.vpn.name
+}
+
+# -------------------------------------------------------------------
+# NATGW to allow ubuntu instances to connect to apt repos.
+# -------------------------------------------------------------------
+
+# 1. Allocate a Static IP (Elastic IP) for the NAT Gateway
+resource "aws_eip" "nat" {
+  domain = "vpc"
+  tags   = { 
+    Project = var.project_name
+    }
+}
+
+# 2. Create the NAT Gateway
+# This MUST be placed in a PUBLIC subnet
+resource "aws_nat_gateway" "main" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = data.terraform_remote_state.networking.outputs.public_subnet_a # A subnet with an IGW route
+
+  tags   = { 
+    Project = var.project_name
+    }
+
+  # To ensure proper ordering, it is recommended to add an explicit dependency
+  # on the Internet Gateway for the VPC.
+}
+
+# 3. Create a Route Table for the Private Subnet
+resource "aws_route_table" "kubernetes_private" {
+  vpc_id = data.aws_vpc.existing.id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main.id
+  }
+
+  tags   = { 
+    Project = var.project_name
+    }
+}
+
+# 4. Associate the Private Subnet with the Private Route Table
+resource "aws_route_table_association" "kubernetes_private" {
+  subnet_id      = aws_subnet.kubernetes_private.id
+  route_table_id = aws_route_table.kubernetes_private.id
 }
