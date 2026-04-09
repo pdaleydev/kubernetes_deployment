@@ -27,3 +27,13 @@ output "vpn_endpoint_dns" {
   description = "VPN endpoint DNS name — needed to build the .ovpn config file"
   value       = aws_ec2_client_vpn_endpoint.kubernetes.dns_name
 }
+
+output "k8_private_subnet_id" {
+  description = "Subnet ID of private subnet for Kubernetes nodes."
+  value       = aws_subnet.kubernetes_private.id
+}
+
+output "k8_private_subnet_cidr" {
+  description = "Subnet CIDR block of private subnet for Kubernetes nodes."
+  value       = aws_subnet.kubernetes_private.cidr_block
+}
