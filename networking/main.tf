@@ -139,6 +139,8 @@ resource "aws_ec2_client_vpn_endpoint" "kubernetes" {
   self_service_portal    = "disabled"
   session_timeout_hours  = 24
 
+  split_tunnel           = true
+
   # Mutual TLS authentication
   authentication_options {
     type                       = "certificate-authentication"
