@@ -188,6 +188,8 @@ resource "aws_instance" "kubernetes_nodes" {
     Name                = each.key
     Role                = each.value.role
     ManagedBy           = "Terraform"
+    Project = var.project_name
+    Cluster = "test-cluster"
     "kubernetes.io/role" = each.value.role
   }
 
