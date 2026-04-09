@@ -1,7 +1,7 @@
 terraform {
     backend "s3" {
         bucket = "pdaley-terraform-states"
-        key = "kubernetes_deployment/compute/terraform.tfstate"
+        key = "kubernetes_deployment/networking/terraform.tfstate"
         region = "us-east-2"
         profile = "vscode"
     }
