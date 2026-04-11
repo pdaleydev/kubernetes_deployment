@@ -75,17 +75,6 @@ resource "aws_iam_policy" "kubernetes_control" {
         ]
         Resource = "*"
       },
-      # ECR - Pull images to EC2 nodes in Kubernetes cluster.
-      {
-        Sid = "ECR Pull Access"
-        "Effect": "Allow",
-        "Action": [
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:GetAuthorizationToken"
-        ],
-        "Resource": "*"
-      },
 
       # IAM — limited, only for EKS service roles
       {
