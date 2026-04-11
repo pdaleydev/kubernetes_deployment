@@ -1,0 +1,19 @@
+# Manually copied 11AM 4/11/2026
+
+plugin: aws_ec2
+regions:
+  - us-east-2
+filters:
+  instance-state-name: ['running']
+  tag:Cluster: "test-cluster"
+keyed_groups:
+  - key: tags.Role
+    prefix: role
+hostnames:
+  - private-ip-address
+compose:
+  ansible_ssh_private_key_file: "~/.ssh/ansible_aws"
+  # Use double quotes inside single quotes for literal strings in compose
+  ansible_user: "'ubuntu'"
+  # This tells Ansible explicitly which IP to use for the SSH connection
+  ansible_host: private_ip_address

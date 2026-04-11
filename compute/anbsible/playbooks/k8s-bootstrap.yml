@@ -1,0 +1,72 @@
+# Manually copied 11AM 4/11/2026
+
+---
+# ==============================================================================
+# PLAY 1: Initialize the Control Plane
+# ==============================================================================
+- name: Bootstrap Kubernetes Control Plane
+  hosts: role_control_plane
+  become: yes
+  vars:
+    ansible_user: ubuntu  # Hardcoded for your AWS nodes
+  tasks:
+    - name: Initialize the Kubernetes cluster
+      command: >
+        kubeadm init
+        --node-name {{ inventory_hostname }}
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Create .kube directory for user
+      file:
+        path: "/home/{{ ansible_user }}/.kube"
+        state: directory
+        mode: '0755'
+        owner: "{{ ansible_user }}"
+
+    - name: Copy admin.conf to user's kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: "/home/{{ ansible_user }}/.kube/config"
+        remote_src: yes
+        owner: "{{ ansible_user }}"
+
+    - name: Install Calico Network Plugin
+      command: kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/calico.yaml
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+      register: cni_result
+      until: cni_result is succeeded
+      retries: 3
+
+    - name: Get the join command for workers
+      command: kubeadm token create --print-join-command
+      register: join_command_raw
+      changed_when: false
+
+    - name: Share join command with other plays
+      set_fact:
+        kubernetes_join_command: "{{ join_command_raw.stdout }}"
+      delegate_to: "{{ item }}"
+      delegate_facts: true
+      with_items: "{{ groups['role_worker'] }}"
+
+    - name: Fetch kubeconfig to on-prem device
+      fetch:
+        src: /etc/kubernetes/admin.conf
+        dest: ~/.kube/config-aws-cluster
+        flat: yes
+
+# ==============================================================================
+# PLAY 2: Join the Worker Nodes
+# ==============================================================================
+- name: Join Worker Nodes to the Cluster
+  hosts: role_worker
+  become: yes
+  vars:
+    ansible_user: ubuntu  # Hardcoded for your AWS nodes
+  tasks:
+    - name: Join the cluster
+      command: "{{ kubernetes_join_command }}"
+      args:
+        creates: /etc/kubernetes/kubelet.conf
