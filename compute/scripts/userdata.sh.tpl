@@ -40,9 +40,9 @@ apt-get update -y
 apt-get install -y containerd apt-transport-https ca-certificates curl gpg
 
 mkdir -p /etc/containerd
-containerd config default | tee /etc/containerd/config.toml
+# containerd config default | tee /etc/containerd/config.toml
 # Use systemd cgroup driver — required for Kubernetes
-sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+# sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
 systemctl restart containerd
 systemctl enable containerd
 

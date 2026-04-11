@@ -1,6 +1,69 @@
-# Manually copied 11AM 4/11/2026
+# Manually copied 12PM 4/11/2026
 
 ---
+# ==============================================================================
+# PLAY 0: Configure containerd and ECR Credential Helper on All Nodes
+# ==============================================================================
+- name: Configure containerd and ECR Credential Helper
+  hosts: role_control_plane:role_worker
+  become: yes
+  vars:
+    ansible_user: ubuntu
+  tasks:
+    - name: Install ECR credential helper
+      apt:
+        name: amazon-ecr-credential-helper
+        state: present
+        update_cache: yes
+
+    - name: Ensure containerd config directory exists
+      file:
+        path: /etc/containerd
+        state: directory
+        mode: '0755'
+
+    - name: Generate and write default containerd config
+      shell: containerd config default > /etc/containerd/config.toml
+      args:
+        creates: /etc/containerd/config.toml
+
+    - name: Set SystemdCgroup to true
+      replace:
+        path: /etc/containerd/config.toml
+        regexp: 'SystemdCgroup = false'
+        replace: 'SystemdCgroup = true'
+      notify: restart containerd
+
+    - name: Ensure credential helper binary is in PATH for containerd
+      file:
+        src: /usr/bin/docker-credential-ecr-login
+        dest: /usr/local/bin/docker-credential-ecr-login
+        state: link
+        force: yes
+
+    - name: Create ECR registry hosts directory
+      file:
+        path: /etc/containerd/certs.d/478067375307.dkr.ecr.us-east-2.amazonaws.com
+        state: directory
+        mode: '0755'
+
+    - name: Write ECR hosts.toml for containerd
+      copy:
+        dest: /etc/containerd/certs.d/478067375307.dkr.ecr.us-east-2.amazonaws.com/hosts.toml
+        content: |
+          server = "https://478067375307.dkr.ecr.us-east-2.amazonaws.com"
+
+          [host."https://478067375307.dkr.ecr.us-east-2.amazonaws.com"]
+            capabilities = ["pull", "resolve"]
+      notify: restart containerd
+
+  handlers:
+    - name: restart containerd
+      systemd:
+        name: containerd
+        state: restarted
+        daemon_reload: yes
+        
 # ==============================================================================
 # PLAY 1: Initialize the Control Plane
 # ==============================================================================

@@ -75,6 +75,17 @@ resource "aws_iam_policy" "kubernetes_control" {
         ]
         Resource = "*"
       },
+      # ECR - Privlidges for AWS user.
+      {
+        Sid = "ECRPullAccess"
+        "Effect": "Allow",
+        "Action": [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:GetAuthorizationToken"
+        ],
+        "Resource": "*"
+      },
 
       # IAM — limited, only for EKS service roles
       {
