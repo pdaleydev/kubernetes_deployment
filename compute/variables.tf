@@ -48,16 +48,16 @@ variable "kubernetes_nodes" {
       instance_type = "t3.medium"
       volume_size   = 25
     }
-    "k8s-worker-2" = {
-      role          = "worker"
-      instance_type = "t3.medium"
-      volume_size   = 25
-    }
-    "k8s-worker-3" = {
-      role          = "worker"
-      instance_type = "t3.medium"
-      volume_size   = 25
-    }
+#    "k8s-worker-2" = {
+#      role          = "worker"
+#      instance_type = "t3.medium"
+#      volume_size   = 25
+#    }
+#    "k8s-worker-3" = {
+#      role          = "worker"
+#      instance_type = "t3.medium"
+#      volume_size   = 25
+#    }
   }
 }
 
