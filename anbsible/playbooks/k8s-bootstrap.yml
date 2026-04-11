@@ -1,20 +1,15 @@
-# Manually copied 12PM 4/11/2026
-
----
 # ==============================================================================
-# PLAY 0: Configure containerd and ECR Credential Helper on All Nodes
+# PLAY 0: Configure containerd on All Nodes
 # ==============================================================================
-- name: Configure containerd and ECR Credential Helper
+- name: Configure containerd on all nodes
   hosts: role_control_plane:role_worker
   become: yes
   vars:
     ansible_user: ubuntu
   tasks:
-    - name: Install ECR credential helper
-      apt:
-        name: amazon-ecr-credential-helper
-        state: present
-        update_cache: yes
+    - name: Wait for apt lock to be released
+      shell: while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 5; done
+      changed_when: false
 
     - name: Ensure containerd config directory exists
       file:
@@ -34,36 +29,13 @@
         replace: 'SystemdCgroup = true'
       notify: restart containerd
 
-    - name: Ensure credential helper binary is in PATH for containerd
-      file:
-        src: /usr/bin/docker-credential-ecr-login
-        dest: /usr/local/bin/docker-credential-ecr-login
-        state: link
-        force: yes
-
-    - name: Create ECR registry hosts directory
-      file:
-        path: /etc/containerd/certs.d/478067375307.dkr.ecr.us-east-2.amazonaws.com
-        state: directory
-        mode: '0755'
-
-    - name: Write ECR hosts.toml for containerd
-      copy:
-        dest: /etc/containerd/certs.d/478067375307.dkr.ecr.us-east-2.amazonaws.com/hosts.toml
-        content: |
-          server = "https://478067375307.dkr.ecr.us-east-2.amazonaws.com"
-
-          [host."https://478067375307.dkr.ecr.us-east-2.amazonaws.com"]
-            capabilities = ["pull", "resolve"]
-      notify: restart containerd
-
   handlers:
     - name: restart containerd
       systemd:
         name: containerd
         state: restarted
         daemon_reload: yes
-        
+
 # ==============================================================================
 # PLAY 1: Initialize the Control Plane
 # ==============================================================================
@@ -71,7 +43,7 @@
   hosts: role_control_plane
   become: yes
   vars:
-    ansible_user: ubuntu  # Hardcoded for your AWS nodes
+    ansible_user: ubuntu
   tasks:
     - name: Initialize the Kubernetes cluster
       command: >
@@ -127,9 +99,74 @@
   hosts: role_worker
   become: yes
   vars:
-    ansible_user: ubuntu  # Hardcoded for your AWS nodes
+    ansible_user: ubuntu
   tasks:
     - name: Join the cluster
       command: "{{ kubernetes_join_command }}"
       args:
         creates: /etc/kubernetes/kubelet.conf
+
+# ==============================================================================
+# PLAY 3: Bootstrap ECR Secret and Apply Kubernetes Manifests
+# ==============================================================================
+- name: Bootstrap ECR credentials and deploy manifests
+  hosts: localhost
+  become: no
+  tags: bootstrap
+  vars:
+    ecr_region: us-east-2
+    ecr_account_id: "478067375307"
+    kubeconfig_path: "{{ lookup('env', 'HOME') }}/.kube/config-aws-cluster"
+    manifests_dir: "{{ lookup('env', 'HOME') }}/kubernetes"
+  tasks:
+    - name: Wait for kubeconfig file to exist
+      wait_for:
+        path: "{{ kubeconfig_path }}"
+        state: present
+        timeout: 60
+
+    - name: Wait for Kubernetes API to be reachable
+      command: kubectl --kubeconfig={{ kubeconfig_path }} get nodes
+      register: api_ready
+      until: api_ready is succeeded
+      retries: 10
+      delay: 15
+
+    - name: Get ECR login token
+      command: aws ecr get-login-password --region {{ ecr_region }}
+      register: ecr_token
+      changed_when: false
+      no_log: true
+
+    - name: Create ECR image pull secret
+      command: >
+        kubectl --kubeconfig={{ kubeconfig_path }}
+        create secret docker-registry ecr-secret
+        --docker-server={{ ecr_account_id }}.dkr.ecr.{{ ecr_region }}.amazonaws.com
+        --docker-username=AWS
+        --docker-password={{ ecr_token.stdout }}
+        --dry-run=client -o yaml
+      register: ecr_secret_yaml
+      changed_when: false
+      no_log: true
+
+    - name: Apply ECR secret
+      shell: >
+        echo '{{ ecr_secret_yaml.stdout }}' |
+        kubectl --kubeconfig={{ kubeconfig_path }} apply -f -
+      no_log: true
+
+    - name: Apply ECR secret refresh CronJob
+      command: >
+        kubectl --kubeconfig={{ kubeconfig_path }}
+        apply -f {{ manifests_dir }}/ecr-secret-refresh.yml
+
+    - name: Apply application deployment
+      command: >
+        kubectl --kubeconfig={{ kubeconfig_path }}
+        apply -f {{ manifests_dir }}/deployment.yml
+
+    - name: Wait for deployment to roll out
+      command: >
+        kubectl --kubeconfig={{ kubeconfig_path }}
+        rollout status deployment/receipt-corrector --timeout=120s
